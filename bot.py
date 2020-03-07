@@ -101,7 +101,7 @@ def main():
         updater.start_webhook(listen="0.0.0.0",
                               port=config.PORT,
                               url_path=config.TOKEN)
-        updater.bot.set_webhook(f"https://{config.HEROKU_APP_NAME}.herokuapp.com/{config.TOKEN}")
+        updater.bot.set.web_hook(f"https://{config.HEROKU_APP_NAME}.herokuapp.com/{config.TOKEN}")
 
     # Run the bot until you press Ctrl-C or the process receives SIGINT,
     # SIGTERM or SIGABRT. This should be used most of the time, since
