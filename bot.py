@@ -15,10 +15,9 @@ bot.
 import logging
 
 import telegram
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler
 
-import config
-import models
+from models import *
 
 # Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -26,75 +25,164 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
-message_count = 1
 
-
-# Define a few command handlers. These usually take the two arguments update and
-# context. Error handlers also receive the raised TelegramError object in error.
-def start(update, context):
-    """Send a message when the command /start is issued."""
-    update.message.reply_text('Hello!')
-
-
-def help(update, context):
-    """Send a message when the command /help is issued."""
-    update.message.reply_text('What can I do for you?')
-
-
-def save(update, context):
+def book_create(update, context):
     msg: telegram.Message = update.message
+    text: str = msg.text
+    done = text.split()
+    del (done[0])
+    if len(done) < 1:
+        update.message.reply_text("You must type the id of the book.")
+        return
 
-    user, created = models.User.get_or_create(
-        tg_id=msg.from_user.id,
-        defaults={
-            "full_name": msg.from_user.full_name
-        }
-    )
+    donev = ""
+    for e in done:
+        donev += " " + e
 
-    models.Message.create(
-        message_id=msg.message_id,
-        chat_id=msg.chat_id,
-        text=msg.text,
-        user=user
-    )
+    query = Book.select().where(Book.name == donev)
+    if query.exists():
+        update.message.reply_text("This book already exists!")
+        return
+
+    book = Book.create(name=donev)
+    id = book.get_id()
+    update.message.reply_text(f"{donev} has successfully been created. Its id is {id}")
 
 
-def last(update, context):
-    last = 10
-    if len(context.args) > 0:
-        last = int(context.args[0])
+def delete_book(update, context):
     msg: telegram.Message = update.message
-    for msg2 in models.Message.filter(chat_id=msg.chat_id).order_by(models.Message.id.desc()).limit(last):
-        update.message.reply_text(msg2.text)
+    text: str = msg.text
+    done = text.split()
+    del (done[0])
+
+    if len(done) < 1:
+        update.message.reply_text("You must type the id of the book.")
+        return
+
+    donev = ""
+    for e in done:
+        donev += " " + e
+
+    try:
+        int(donev)
+    except ValueError:
+        update.message.reply_text("Arguments must be integer")
+        return
+
+    donev = int(donev)
+
+    try:
+        Book.get_by_id(donev)
+    except peewee.DoesNotExist:
+        update.message.reply_text("This book does not exist!")
+        return
+
+    update.message.reply_text(f"{donev} has successfully been deleted")
+    Book.delete_by_id(donev)
+
+
+def get_book(update, context):
+    msg: telegram.Message = update.message
+    text: str = msg.text
+    done = text.split()
+    del (done[0])
+
+    if len(done) < 1:
+        update.message.reply_text("You must type the id of the book.")
+        return
+
+    donev = ""
+    for e in done:
+        donev += " " + e
+
+    try:
+        int(donev)
+    except ValueError:
+        update.message.reply_text("Arguments must be integer")
+        return
+
+    donev = int(donev)
+
+    try:
+        Book.get_by_id(donev)
+    except peewee.DoesNotExist:
+        update.message.reply_text("This book does not exist!")
+        return
+
+    book = Book.get_by_id(donev)
+    update.message.reply_text(f"This book named {book.name}")
+
+
+def find_book(update, context):
+    msg: telegram.Message = update.message
+    text: str = msg.text
+    done = text.split()
+    del (done[0])
+
+    if len(done) < 1:
+        update.message.reply_text("You must type the text.")
+        return
+
+    donev = ""
+    for e in done:
+        donev += " " + e
+
+    book = Book.select().where(Book.name.contains(donev))
+    if not book.exists():
+        update.message.reply_text("This book does not exist!")
+        return
+    newbook = Book.get_by_id(book.get())
+    update.message.reply_text(f"This book named {newbook.name}. Its id is {book.get()}")
+
+
+def update_book(update, context):
+    msg: telegram.Message = update.message
+    text: str = msg.text
+    done = text.split()
+    del (done[0])
+
+    if len(done) < 1:
+        update.message.reply_text("You must type the id of the book.")
+        return
+
+    if len(done) < 2:
+        update.message.reply_text("You must type the new name of the book.")
+        return
+
+    donev = done[0]
+    try:
+        int(donev)
+    except ValueError:
+        update.message.reply_text("ID must be integer")
+        return
+
+    donev = int(donev)
+
+    try:
+        Book.get_by_id(donev)
+    except peewee.DoesNotExist:
+        update.message.reply_text("This book does not exist!")
+        return
+
+    book = Book.get_by_id(donev)
+    book.name = done[1]
+    book.save()
+    update.message.reply_text(f"This book has been named as {done[1]}")
 
 
 def error(update, context):
-    """Log Errors caused by Updates."""
     logger.warning('Update "%s" caused error "%s"', update, context.error)
 
 
 def main():
-    """Start the bot."""
-    # Create the Updater and pass it your bot's token.
-    # Make sure to set use_context=True to use the new context based callbacks
-    # Post version 12 this will no longer be necessary
     updater = Updater(config.TOKEN, use_context=True)
-
-    # Get the dispatcher to register handlers
     dp = updater.dispatcher
-
-    # on different commands - answer in Telegram
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help))
-    dp.add_handler(CommandHandler("last", last))
-
-    # on noncommand i.e message - echo the message on Telegram
-    dp.add_handler(MessageHandler(Filters.text, save))
-
-    # log all errors
+    dp.add_handler(CommandHandler("create", book_create))
+    dp.add_handler(CommandHandler("delete", delete_book))
+    dp.add_handler(CommandHandler("get", get_book))
+    dp.add_handler(CommandHandler("update", update_book))
+    dp.add_handler(CommandHandler("search", find_book))
     dp.add_error_handler(error)
-
-    # Start the Bot
     if config.HEROKU_APP_NAME is None:
         updater.start_polling()
     else:
@@ -103,9 +191,6 @@ def main():
                               url_path=config.TOKEN)
         updater.bot.set_webhook(f"https://{config.HEROKU_APP_NAME}.herokuapp.com/{config.TOKEN}")
 
-    # Run the bot until you press Ctrl-C or the process receives SIGINT,
-    # SIGTERM or SIGABRT. This should be used most of the time, since
-    # start_polling() is non-blocking and will stop the bot gracefully.
     updater.idle()
 
 
